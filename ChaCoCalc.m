@@ -1,24 +1,24 @@
-function All_LoCoMNI = ChaCoCalc(DamageFileName,Coreg2MNI,CalcSpace,atlassize,StrSave,NumWorkers,dispMask,coregOnly)
-% This function takes in a lesion mask and projects the damage onto the 
+function All_LoCoMNI = ChaCoCalc(DamageFileName,Coreg2MNI,CalcSpace,atlassize,StrSave,NumWorkers,dispMask,coregOnly, main_dir)
+% This function takes in a lesion mask and projects the damage onto the
 % areas of the cortex that have losses in connectivity resulting from that
 % pattern of injury. It also outputs the network produced by taking intact
 % networks and removing fiber streamlines through those areas of injury.
 %--------------------------------------------------------------------------
-% Input 
+% Input
 % DamageFileName        A string with the filename of the Damage Mask
-% Coreg2MNI             A structure provided if the mask is in native 
-%                       (individual) space and needs to be coregistered to 
-%                       MNI space. If the mask is already in MNI space,  
-%                       provide an empty structure. This struct has the 
-%                       following fields: 
-%                       ImageFileName: A string with the filename of the 
+% Coreg2MNI             A structure provided if the mask is in native
+%                       (individual) space and needs to be coregistered to
+%                       MNI space. If the mask is already in MNI space,
+%                       provide an empty structure. This struct has the
+%                       following fields:
+%                       ImageFileName: A string with the filename of the
 %                       stuctural image.
-%                       StructImageType: A string indicating which image 
-%                       type the structural image is - this will be used 
+%                       StructImageType: A string indicating which image
+%                       type the structural image is - this will be used
 %                       in the normalization routine.
-% CalcSpace             A string denoting the space in which to calculate 
-%                       the LoCo, either 'MNI','T1', or 'both'.   
-% atlassize             A number indicating the cortical atlas you would 
+% CalcSpace             A string denoting the space in which to calculate
+%                       the LoCo, either 'MNI','T1', or 'both'.
+% atlassize             A number indicating the cortical atlas you would
 %                       like to use, either 86 (FreeSurfer) or 116 (AAL).
 % StrSave               A string identifying the LoCo results file name.
 % NumWorkers            The number of parallel workers you'd like to use.
@@ -31,12 +31,16 @@ function All_LoCoMNI = ChaCoCalc(DamageFileName,Coreg2MNI,CalcSpace,atlassize,St
 % OutStrMNI             The filename of the LoCo results (MNI space).
 % OutStrT1              The filename of the LoCo results (T1 space).
 %
-% Written by 
+% Written by
 % Amy Kuceyeski
 % IDEAL
-% Weill Cornell Medical College 
-% August 24, 2012  
+% Weill Cornell Medical College
+% August 24, 2012
 %--------------------------------------------------------------------------
+startup_varsonly
+%global main_dir
+
+
 %Set up the defaults
 if nargin < 1
     error('You must at least input a damage mask...')
@@ -63,35 +67,40 @@ if nargin < 8 || isempty(coregOnly)
     coregOnly = 0;
 end
 %Start the program....
-if NumWorkers > 1;
-    if matlabpool('size')==0
-        eval(['matlabpool open ' num2str(NumWorkers)]);
-    elseif ~(matlabpool('size')==NumWorkers);
-        matlabpool close
-        eval(['matlabpool open ' num2str(NumWorkers)]);
+if NumWorkers > 1
+    poolobj = gcp('nocreate'); % If no pool, do not create new one.
+    if isempty(poolobj)
+        parpool(NumWorkers);
+    else
+        poolsize = poolobj.NumWorkers;
+        if poolsize ~= NumWorkers
+            delete(gcp('nocreate'))
+            parpool(NumWorkers);
+        end
     end
 end
 
+
 %Make sure the files are correctly mapped...
-SVNEveTools = ['mymfiles' filesep 'eve_tools']; %change into relative path
-AtlasingDir = ['resource' filesep 'Atlasing'];
-SPMdir8 = ['mymfiles' filesep 'spm8'];
-niitools = ['mymfiles' filesep 'nifti_toolbox'];
-ODFtools = ['mymfiles' filesep 'ODF_Qball'];
-SCBtrack = ['mymfiles' filesep 'Tracking_Bayes'];
-mymfiles = 'mymfiles';
+SVNEveTools = [start_dir filesep 'eve_tools']; %change into relative path
+AtlasingDir = [start_dir filesep '..' filesep 'resource' filesep 'Atlasing'];
+SPMdir8 = [start_dir filesep 'spm8'];
+niitools = [start_dir filesep 'nifti_toolbox'];
+ODFtools = [start_dir filesep 'ODF_Qball'];
+SCBtrack = [start_dir filesep 'Tracking_Bayes'];
+mymfiles = start_dir;
 
 if ~(ismcc() || isdeployed())
-addpath(['mymfiles' filesep 'BCT']);
-addpath(SCBtrack)
-addpath(mymfiles)
-p = genpath(SVNEveTools);
-addpath(p);
-p3 = genpath(SPMdir8);
-addpath(p3);
-addpath(AtlasingDir)
-addpath(niitools)
-addpath(ODFtools)
+    %addpath(['mymfiles' filesep 'BCT']);
+    addpath(SCBtrack)
+    addpath(mymfiles)
+    p = genpath(SVNEveTools);
+    addpath(p);
+    p3 = genpath(SPMdir8);
+    addpath(p3);
+    addpath(AtlasingDir)
+    addpath(niitools)
+    addpath(ODFtools)
 end
 
 [pth,fn,ext] = fileparts(DamageFileName);
@@ -143,8 +152,8 @@ end
 results_dir = pth;
 if ~isdir(results_dir); mkdir(results_dir); end
 results_dir2 = [pth filesep 'DetailedChaCoResults'];
-if ~isdir(results_dir2); mkdir(results_dir2); end
-main_dir = ['Tractograms' filesep];
+if ~isdir(results_dir2); disp(results_dir2); mkdir(results_dir2); end
+%main_dir = [tractdir filesep 'Tractograms' filesep]
 FT_MNI = [main_dir 'FiberTracts' num2str(atlassize) '_MNI_BIN'];
 
 PatStr = Dir2Arr(FT_MNI,'e0*');
@@ -153,7 +162,7 @@ PatStr = Dir2Arr(FT_MNI,'e0*');
 %results_dir = [main_dir 'LoCoCalc/MNIresults'];
 ROI_num_filename = [FT_MNI filesep 'w1mm_T1_nzROInum.mat'];
 Damage = spm_read_vols(spm_vol(DamageFileName));
-%Seed_Damage = spm_read_vols(spm_vol('/home/amy/work/BTFdata/Normals/LoCoCalc/w1444_WML.img')); 
+%Seed_Damage = spm_read_vols(spm_vol('/home/amy/work/BTFdata/Normals/LoCoCalc/w1444_WML.img'));
 %results_dir = '/mnt/extra/ADdata_Zhang/GroupWiseStats/MNI_LoCo';
 %Damage = spm_read_vols(spm_vol([results_dir filesep 'MNIrzwbAD_fdr0p05_clust0.img']));
 %StrSave = 'GWAD86';
@@ -231,6 +240,7 @@ if strcmp(CalcSpace,'MNI') || strcmp(CalcSpace,'both')
         [netmet4(i,1),netmet4(i,2),~,netmet4(i,3),netmet4(i,4)] = charpath(D);
         LoCoResults(i).OrigMat.nMetsMapTFC = [netmet4(i,1),netmet4(i,2),netmet4(i,3),netmet4(i,4)];
     end
+    
     mLoCo = zeros(size(LoCoResults(1).Regions));
     CM = zeros(size(LoCoResults(1).ConMat));
     nCM = zeros(size(LoCoResults(1).nConMat));
@@ -274,13 +284,13 @@ end
 function [AZ_file,Affect_location] = PathDisruption(WMseed_Weights,ROI_numFileName,OutPathFileName,PathsByRegion)
 
 % WMmask = load(WMmaskFileName); WMf = fieldnames(WMmask); eval(['WMmask = WMmask.' WMf{1} ';']); WMmask = find(WMmask);
-% 
+%
 % if ischar(WMseedFileName)
 %     WMseed = load(WMseedFileName); WMf = fieldnames(WMseed); eval(['WMseed = WMseed.' WMf{1} ';']); WMseed = find(WMseed);
 % else
 %     WMseed = find(WMseedFileName);
 % end
-% 
+%
 % WMseed = intersect(WMseed,WMmask);
 WMseed = find(WMseed_Weights);
 
@@ -299,20 +309,20 @@ for ii = 1:runl
     i = runindex(ii);
     %First load all the paths within the ROI
     PathsROI = nemo_read(strcat(PathsByRegion, [filesep 'PathsInROI_'], num2str(i),'.bin'), [181 217 181]); % To be replaced by nemo_read function
-    pix_in_ROI = WMseed(ROI_num_WMseeds==i);    
+    pix_in_ROI = WMseed(ROI_num_WMseeds==i);
     if ~isempty(pix_in_ROI)
-        [WMi,WMj,WMk] = ind2sub(size(ROI_num),pix_in_ROI);        
+        [WMi,WMj,WMk] = ind2sub(size(ROI_num),pix_in_ROI);
         for k = 1:length(PathsROI)
             path_floor = floor(PathsROI(k).voxels);
-            intvox = intersect(path_floor',[WMi,WMj,WMk],'rows');
+            intvox = intersect(path_floor',[WMi,WMj,WMk],'rows','legacy');
             if  ~isempty(intvox)
                 Affect_zones = [Affect_zones; PathsROI(k).regions];
                 Affect_location = [Affect_location; PathsROI(k).location];
                 Affect_weight = [Affect_weight; min(WMseed_Weights(sub2ind(size(ROI_num),intvox(:,1),intvox(:,2),intvox(:,3))))];
-%                 if ~(max(WMseed_Weights(sub2ind(size(ROI_num),intvox(:,1),intvox(:,2),intvox(:,3))))==min(WMseed_Weights(sub2ind(size(ROI_num),intvox(:,1),intvox(:,2),intvox(:,3)))))
-%                     disp('shit')
-%                 end
-                    % Affect_subject = [Affect_subject; PathsROI(k).PatientID];
+                %                 if ~(max(WMseed_Weights(sub2ind(size(ROI_num),intvox(:,1),intvox(:,2),intvox(:,3))))==min(WMseed_Weights(sub2ind(size(ROI_num),intvox(:,1),intvox(:,2),intvox(:,3)))))
+                %                     disp('shit')
+                %                 end
+                % Affect_subject = [Affect_subject; PathsROI(k).PatientID];
             end
         end
     end

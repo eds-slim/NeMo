@@ -1,5 +1,7 @@
 function PlotChaCoResults(ChaCoResultsFileName,GBPlot,SurfPlot,BoxPlot,GraphPlot,figstr,plotlobecolor)
 
+startup_varsonly;
+
 [pth,fn,~] = fileparts(ChaCoResultsFileName);
 load(ChaCoResultsFileName)
 if strfind(fn,'_T1')
@@ -10,9 +12,9 @@ end
 
 atsz = length(ChaCoResults(1).Regions);
 if atsz==116
-    AtlasName = ['resource' filesep 'at' num2str(atsz) filesep 'sacos007a1001_Atlas.img'];
+    AtlasName = [start_dir filesep '..' filesep 'resource' filesep 'at' num2str(atsz) filesep 'sacos007a1001_Atlas.img'];
 elseif atsz==86
-    AtlasName = ['resource' filesep 'at' num2str(atsz) filesep 'saT1_atlas86.nii'];
+    AtlasName = [start_dir filesep '..' filesep 'resource' filesep 'at' num2str(atsz) filesep 'saT1_atlas86.nii'];
 end
 at = spm_read_vols(spm_vol(AtlasName));
 at(isnan(at)) = 0;
@@ -108,7 +110,7 @@ if BoxPlot.flag == 1
 end
 if GraphPlot.flag == 1
     if GraphPlot.Global == 1;
-        load(['Tractograms' filesep 'FiberTracts' num2str(atsz) '_MNI_BIN' filesep 'AllConnMatrices' num2str(atsz) '_FT_MNI' filesep 'nGraphMets' num2str(atsz) '_MNI']);
+        load([start_dir filesep '..' filesep 'Tractograms' filesep 'FiberTracts' num2str(atsz) '_MNI_BIN' filesep 'AllConnMatrices' num2str(atsz) '_FT_MNI' filesep 'nGraphMets' num2str(atsz) '_MNI']);
         netmet = [];
         netmet_NC = [];
         for i = 2:length(ChaCoResults);
